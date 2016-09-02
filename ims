@@ -1,0 +1,267 @@
+#!/usr/bin/env ruby
+require "minitest/autorun"
+require "minitest/spec"
+
+require "pstore"
+require "./music_storage.rb"
+
+$help = """  Commands for IMS:
+\t1. help - Display this help message
+\t2. exit - Save the current state and exit the program
+\t3. info - Display a summary of the current status
+\t4. info track <track_number> - Display some info about a track. 
+\t                               Example: info track 2
+\t5. info artist <artist_id> - Display some info about an artist. 
+\t                             Example: info track jh
+\t6. add artist <artist_name> - Add an artist to ims. 
+\t                              Example: add artist Joe Hisaishi
+\t7. add track <track_name> by <artist_id> - Add a track for an existing artist. 
+\t                                           Example: add track One Summer's Day by jh
+\t8. play track <track_number> - Play a track, IMS will record it as played. 
+\t                               Example: play track 2
+\t9. count tracks by <artist_id> - Count the number of tracks by an given artist.
+\t                                 Example: count tracks by jh
+\t10. list tracks by <artist_id> - Display all the tracks by the given artist.
+\t                                 Example: list tracks by jh
+"""
+
+class IMS
+	def initialize(artistStorage, trackStorage)
+		#initialize the terminate flag
+		#if @terminate flag is true, then mainLoop stops
+		@terminate = false
+		@storage = MusicStorage.new(artistStorage,trackStorage)
+	end
+
+	def mainLoop()
+		#if @terminate flag is true, end loop
+		while !@terminate
+		    print "> "
+		    parseCommand(gets.chomp)
+		end
+	end
+
+	# The main parser for all the commands
+	def parseCommand(command)
+		# i following an re to ignore cases
+		if /^exit$/i =~ command
+			exit()
+		elsif /^help$/i =~ command
+			help()
+		elsif /^info$/i =~ command
+			summary()
+		elsif /^info track \s*(.+)$/i =~ command
+			trackNumber = $~[1]
+			trackInfo(trackNumber)
+		elsif /^info artist \s*(.+)$/i =~ command
+			artistID = $~[1]
+			artistInfo(artistID)
+		# Using (?-i) to preserve the case of artist and track names
+		elsif /^add artist \s*((?-i).+)$/i =~ command
+			artistName = $~[1]
+			addArtist(artistName)
+		elsif /^add track \s*((?-i).+) by (\w+)$/i =~ command
+			trackName = $~[1]
+			artistID = $~[2]
+			addTrack(trackName, artistID)
+		elsif /^play track \s*(.+)$/i =~ command
+			trackNumber = $~[1]
+			playTrack(trackNumber)
+		elsif /^count tracks by \s*(.+)$/i =~ command
+			artistID = $~[1]
+			countTracks(artistID)
+		elsif /^list tracks by \s*(\w+)$/i =~ command
+			artistID = $~[1]
+			listTracks(artistID)
+		else
+			puts "Command not recognized, enter \'help\' for a list of supported commands and their usages."
+		end
+	end
+
+	def exit()
+		#save state and change flag @terminate to true
+		@terminate = true
+	end
+    
+    # display the help message
+	def help()
+		puts $help
+	end
+
+	def summary()
+		#display a summary of the current state
+		puts "Total number of tracks #{@storage.getTotalTrackCount}"
+		puts "Total number of artists #{@storage.getTotalArtistCount}"
+		puts "Last played tracks:"
+		lastPlayed = @storage.getLastPlayed
+		lastPlayed.each do |track|
+			if !track.nil?
+				artist = @storage.getArtist(track.artistID)
+				puts "\t#{track.name} by #{artist.name}"
+			end
+		end
+	end
+
+    # List the information about a given track
+	def trackInfo(trackNumber)
+		# if trackNumber is in a legal format
+		if isTrackNumber(trackNumber)
+			# check if the track is in the storage or not
+			if @storage.hasTrack(trackNumber)
+				track = @storage.getTrack(trackNumber)
+				artist = @storage.getArtist(track.artistID)
+				info = "Info about track #{trackNumber}:\n"\
+				       "\tName: #{track.name}\n"\
+				       "\tArtist: #{artist.name}\n"\
+				       "\tArtist ID: #{artist.id}\n"
+				puts info
+			else
+				puts "Error: Unknown track number #{trackNumber}"
+			end
+		end
+	end
+
+    # List the information about a given artist
+	def artistInfo(artistID)
+		if isArtistID(artistID)
+			if @storage.hasArtistID(artistID)
+				artist = @storage.getArtist(artistID)
+				info = "Info about artist #{artistID}:\n"\
+				       "\tArtist Name: #{artist.name}\n"\
+				       "\tArtist ID: #{artist.id}\n"\
+				       "\tNumber of Tracks: #{artist.tracks.size}"
+
+				puts info
+			else
+				puts "Error: Unknown artist ID #{artistID}"
+			end
+		end
+	end
+
+    # add a track to the storage
+	def addTrack(trackName, artistID)
+		# check if the artist ID exists
+		if !@storage.hasArtistID(artistID)
+			puts "Error: Unrecognized artist ID"
+		else
+		    number = makeTrackNumber
+		    @storage.addTrack(trackName, number, artistID)
+		    puts "Added #{trackName} as track, track number is #{number}"
+		end
+	end
+
+    # add an artist to the storage
+    # artist doesn't have any tracks associated at this point
+	def addArtist(artistName)
+		id = makeArtistID(artistName)
+		@storage.addArtist(artistName, id)
+		puts "Added #{artistName} as artist, artist ID is #{id}"
+	end
+
+    # record the given track as played
+	def playTrack(trackNumber)
+		@storage.playTrack(trackNumber)
+	end
+
+    # count the total number of tracks in storage for the given artist
+	def countTracks(artistID)
+		#display the number of tracks know by the specified artist
+		if isArtistID(artistID)
+			if @storage.hasArtistID(artistID)
+		        tracks = @storage.getTracksBy(artistID)
+		        puts "Artist #{artistID} has #{tracks.size} track(s)."
+		    else
+		    	puts "Error: Unrecognized artist ID"
+		    end
+		end
+	end
+
+    # list all the tracks by number and name, for the given artist
+	def listTracks(artistID)
+		# check if the artist ID exists
+		if !@storage.hasArtistID(artistID)
+			puts "Error: Unrecognized artist ID"
+		else
+			artist = @storage.getArtist(artistID)
+			artistTracks = artist.tracks
+			puts "Tracks by #{artist.name}:"
+			artistTracks.each do |track|
+				puts "\tTrack ##{track.number} - #{track.name}"
+			end
+		end
+	end
+
+
+	# generate an id for a given artist name
+	def makeArtistID(artistName)
+		num = 0
+		splitName = artistName.downcase.split
+		initials = splitName.map {|word| word[0]}.join
+		id = initials
+		# if the initials already exist in storage, add a number to it.
+		if @storage.hasArtistID(id)
+			id += num.to_s
+			num += 1
+		end
+		# keep increasing the number until the id doesn't exist in storage.
+		while @storage.hasArtistID(id)
+			id = initials + num.to_s
+			num += 1
+		end
+
+		return id
+	end
+
+	# track number is just the total number of tracks in storage + 1
+	def makeTrackNumber()
+		number = @storage.getTotalTrackCount + 1
+		# Convert number to string, so that in @storage, track number is stored as a string
+		return number.to_s
+	end
+
+	# methods for checking the fomats of track numbers or artist IDs.
+	def isTrackNumber(trackNumber)
+		if /^\d+$/ =~ trackNumber
+			return true
+		else
+			puts "Invalid track number, must be digits." 
+			return false
+		end
+	end
+
+	def isArtistID(artistID)
+		if /^\w+$/ =~ artistID
+			return true
+		else
+			puts "Invalid artist ID, must be a series of alphanumerical characters." 
+			return false
+		end
+	end
+end
+
+ims = IMS.new("artists.pstore", "tracks.pstore")
+ims.mainLoop()
+
+
+describe "Parsing test" do
+	it "should parse commands correctly" do
+		ims = IMS.new("test_artists1.pstore", "test_tracks1.pstore")
+
+		ims.makeArtistID("Test Artist").must_equal "ta"
+
+		ims.parseCommand("Add Artist Test Artist")
+		ims.makeArtistID("Test Artist").must_equal "ta0"
+
+		ims.parseCommand("add Track Test Track by ta")
+		ims.parseCommand("ADD track Test Track 1 by tz")
+		ims.parseCommand("play track 1")
+		ims.parseCommand("play track 1")
+		ims.parseCommand("play track 1")
+		ims.parseCommand("play track 1")
+
+		s = MusicStorage.new("test_artists1.pstore", "test_tracks1.pstore")
+		s.getTracksBy("ta").size.must_equal 1
+		s.getLastPlayed.size.must_equal 3
+
+	end
+end
