@@ -16,15 +16,15 @@ end
 
 # class for storing information for a track
 class Track
-	def initialize(name, number, artistID)
+	def initialize(name, number, artist_id)
 		@name = name
 		@number = number
-		@artistID = artistID
+		@artist_id = artist_id
 	end
 
 	attr_reader :name
 	attr_reader :number
-	attr_reader :artistID
+	attr_reader :artist_id
 end
 
 
@@ -44,6 +44,6 @@ describe "Track" do
 		a = Track.new("One Summer's Day","2", "jh")
 		a.name.must_equal "One Summer's Day"
 		a.number.must_equal "2"
-		a.artistID.must_equal "jh"
+		a.artist_id.must_equal "jh"
 	end
 end
