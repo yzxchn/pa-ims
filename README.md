@@ -1,3 +1,4 @@
+<a href="https://codeclimate.com/github/yzxchn/pa-ims"><img src="https://codeclimate.com/github/yzxchn/pa-ims/badges/gpa.svg" /></a>
 I divided the problem in about three parts:
 
 1. The IMS class, which contains the main loop, and the parsing method for user commands. It also has methods for verifying the validity of the commands, and those that facilitate the interactions between this class and the MusicStorage class.
